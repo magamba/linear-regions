@@ -159,6 +159,19 @@ def add_local_args(parser):
         help="Seed for sampling data points to generate paths. The seed is used to shuffle the dataset split where paths are generated from, to ensure reproducibility."
     )
 
+    opt_group.add_argument(
+        "--l_open-path",
+        action="store_true",
+        default=False,
+        help="Generate open paths using weak augmentations."
+    )
+
+    opt_group.add_argument(
+        "--l_random-dataset",
+        action="store_true",
+        default=False,
+        help="Use in combination with DATA. Generate random dataset with the same pixel-wise statistics as DATA.",
+
 
 def main(args, logs_path):
     logger.info(args)
@@ -193,7 +206,7 @@ def main(args, logs_path):
     data_manager = create_data_manager(
         args,
         args.label_noise,
-        seed=args.seed,
+        seed=args.label_seed,
         train_validation_split=tv_split,
         normalize=True,
         gen_paths=True,

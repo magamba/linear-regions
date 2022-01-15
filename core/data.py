@@ -4,32 +4,23 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset, DataLoader, random_split
 from torchvision import datasets as torch_dsets, transforms as tx
-from dataclasses import dataclass
 from typing import Tuple, Union
 from types import SimpleNamespace
 import logging
 
 from core import utils
+from core.random_dataset import RANDOM_DATASETS_MAP, RANDOM_DATASETS, RANDOM_DATASETS_INFO_MAP
 
 logger = logging.getLogger(__name__)
 
-DATASETS = ("cifar10", "cifar100")
+DATASETS = ("cifar10", "cifar100") + RANDOM_DATASETS
 Datasets = SimpleNamespace(**{ds: ds for ds in DATASETS})
 
-
-@dataclass(frozen=True)
-class DatasetInfo:
-    __slots__ = ["name", "input_shape", "output_dimension"]
-    name: str
-    input_shape: Union[Tuple[int, int, int], int]
-    output_dimension: int
-
-
 DATASET_INFO_MAP = {
-    "cifar10": DatasetInfo("cifar10", (3, 32, 32), 10),
-    "cifar100": DatasetInfo("cifar100", (3, 32, 32), 100),
+    "cifar10": utils.DatasetInfo("cifar10", (3, 32, 32), 10),
+    "cifar100": utils.DatasetInfo("cifar100", (3, 32, 32), 100),
+    **RANDOM_DATASETS_INFO_MAP,
 }
-
 
 DatasetInfos = SimpleNamespace(**DATASET_INFO_MAP)
 
@@ -120,6 +111,46 @@ class PathTransform:
         return output.type(torch.float64)
 
 
+class PathTransformOpen(PathTransform):
+
+    def __init__(self, input_shape, mean=None, std=None, num_anchor=10, radius=4):
+        super(PathTransformOpen, self).__init__(
+            input_shape=input_shape, 
+            mean=mean, 
+            std=std, 
+            num_anchor=num_anchor, 
+            radius=radius
+        )
+        self.ts = np.linspace(0, 1, num_anchor, endpoint=False)
+        
+    def __call__(self, x):
+        """
+        @param x: PIL Image to be transformed
+        @return torch.Tensor : of shape [K, C, H, W], where K=@self.num_points
+                               is the number of anchor points in each path
+        """
+        output = torch.zeros(self.output_shape)
+        x = tx.functional.pad(x, padding=2 * self.radius, padding_mode="edge")
+        
+        for k, t in enumerate(self.ts):
+            s = 0.5 * np.pi * t + (1. - t) * 1.5 * np.pi
+            translated_x = tx.functional.affine(
+                x,
+                angle=0,
+                translate=(self.output_shape[-1] / self.num_anchor, self.radius * np.sin(s)),
+                scale=1,
+                shear=0,
+            )
+            translated_x = tx.functional.center_crop(
+                translated_x, output_size=list(self.output_shape[2:])
+            )
+            output[k] = tx.functional.to_tensor(translated_x)
+
+            if self.normalize:
+                output = utils.normalize(output, mean=self.mean, std=self.std)
+        return output.type(get_default_dtype())
+
+
 def corrupt_labels(dset, noise_percent, seed=None):
     from numpy.random import default_rng
     rng = default_rng(seed)
@@ -128,11 +159,15 @@ def corrupt_labels(dset, noise_percent, seed=None):
         return
     if isinstance(dset, Subset):
         all_targets = dset.dataset.targets
+        dset.dataset._targets_orig = dset.dataset.targets.copy()
         if isinstance(all_targets, list):
             all_targets = torch.tensor(all_targets)
-            targets = all_targets[dset.indices]
+        targets = all_targets[dset.indices]
     else:
         targets = dset.targets
+        dset._targets_orig = dset.targets.copy()
+        if isinstance(targets, list):
+            targets = torch.tensor(targets)
 
     num_classes = targets.unique().shape[0]
 
@@ -141,7 +176,7 @@ def corrupt_labels(dset, noise_percent, seed=None):
         noise[0:num_labels_to_corrupt] = 1
     else:
         noise[0:num_labels_to_corrupt] = torch.from_numpy(
-            rng.integers(1, num_classes - 1, (num_labels_to_corrupt,))
+            rng.integers(1, num_classes, (num_labels_to_corrupt,))
         )
     shuffle = torch.from_numpy(rng.permutation(noise.shape[0]))
     noise = noise[shuffle]
@@ -179,16 +214,30 @@ def create_dataset(
     augment=False,
     subset_pct=None,
     gen_paths=False,
-    validation=False
+    validation=False,
+    override_dset_class=None
 ):
     if args.data not in DATASETS:
         raise ValueError("{} is not a valid dataset".format(args.data))
 
     dset = None
     if args.data == Datasets.cifar10:
-        CIFAR10 = torch_dsets.CIFAR10
+        if args.l_random_dataset:
+            dclass = RANDOM_DATASETS_MAP["random_" + str(args.data)]
+        else:
+            CIFAR10 = torch_dsets.CIFAR10
+        
+        if override_dset_class is not None:
+            CIFAR10 = override_dset_class(dclass)
+        else:
+            CIFAR10 = dclass    
+        
         if gen_paths:
-            transforms = PathTransform(
+            if args.l_open_path:
+                PathTransformCls = PathTransformOpen
+            else:
+                PathTransformCls = PathTransform
+            transforms = PathTransformCls(
                 DatasetInfos.cifar10.input_shape,
                 mean=(0.4914, 0.4822, 0.4465) if normalize else None,
                 std=(0.2023, 0.1994, 0.2010) if normalize else None,
@@ -214,9 +263,22 @@ def create_dataset(
             args.e_data_dir, transform=transforms, train=train, download=False
         )
     elif args.data == Datasets.cifar100:
-        CIFAR100 = torch_dsets.CIFAR100
+        if args.l_random_dataset:
+            dclass = RANDOM_DATASETS_MAP["random_" + str(args.data)]
+        else:
+            CIFAR100 = torch_dsets.CIFAR100
+            
+        if override_dset_class is not None:
+            CIFAR100 = override_dset_class(dclass)
+        else:
+            CIFAR100 = dclass    
+            
         if gen_paths:
-            transforms = PathTransform(
+            if args.l_open_path:
+                PathTransformCls = PathTransformOpen
+            else:
+                PathTransformCls = PathTransform
+            transforms = PathTransformCls(
                 DatasetInfos.cifar100.input_shape,
                 mean=(0.5071, 0.4865, 0.4409) if normalize else None,
                 std=(0.2009, 0.1984, 0.2023) if normalize else None,
@@ -260,6 +322,7 @@ class DataManager:
     tloader: DataLoader
     vloader: DataLoader
     vset: Dataset
+    tset: Dataset
 
 
 def create_data_manager(
@@ -272,7 +335,10 @@ def create_data_manager(
     train_subset_pct=None,
     test_subset_pct=None,
     gen_paths=False,
+    override_dset_class=None
 ):
+    if override_dset_class is None and gen_paths:
+        override_dset_class=with_indices
     dset = create_dataset(
         args,
         train=True,
@@ -280,6 +346,7 @@ def create_data_manager(
         augment=augment,
         subset_pct=train_subset_pct,
         gen_paths=gen_paths,
+        override_dset_class=override_dset_class
     )
     tset = create_dataset(
         args,
@@ -288,6 +355,7 @@ def create_data_manager(
         augment=False,
         subset_pct=train_subset_pct,
         gen_paths=gen_paths,
+        override_dset_class=override_dset_class
     )
     vset, vloader = None, None
     if train_validation_split != (None, None):
@@ -298,7 +366,8 @@ def create_data_manager(
             augment=False,
             subset_pct=train_subset_pct,
             gen_paths=gen_paths,
-            validation=True
+            validation=True,
+            override_dset_class=override_dset_class
         )
         if seed is not None:
             torch.manual_seed(seed)
@@ -318,24 +387,26 @@ def create_data_manager(
             )
         )
         torch.set_rng_state(rng_state)
-    corrupt_labels(dset, noise, seed)
+    corrupt_labels(dset, noise, args.label_seed)
     num_workers = args.e_workers
-    if args.e_device != "cpu" and torch.cuda.device_count() > 0 and gen_paths:
+    pin_memory=True
+    if args.e_device != "cpu" and torch.cuda.device_count() > 1 and gen_paths:
         logger.warn("Setting data-loader workers to 0 to avoid conflict with torch.multiprocessing and GPU workers.")
         num_workers = 0
+        pin_memory=False
     
     logger.info("Running with {} cpu workers.".format(num_workers))
     kwargs_train = {
         "batch_size": args.batch_size,
         "num_workers" : num_workers,
         "shuffle": True,
-        "pin_memory": True,
+        "pin_memory": pin_memory,
     }
     kwargs_no_train = {
         "batch_size": args.batch_size,
         "num_workers" : num_workers,
         "shuffle": gen_paths,
-        "pin_memory": True,
+        "pin_memory": pin_memory,
     }
 
     if gen_paths:
@@ -352,4 +423,5 @@ def create_data_manager(
         tloader,
         vloader,
         vset,
+        tset,
     )

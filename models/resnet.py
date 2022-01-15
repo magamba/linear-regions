@@ -113,7 +113,7 @@ class ResNetNoBN(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=False)
-        self.layer1 = self._make_layer(block, 16, layers[0])
+        self.layer1 = self._make_layer(block, self.inplanes, layers[0])
         self.layer2 = self._make_layer(
             block,
             channels[0],
@@ -255,6 +255,8 @@ class ResNetNoBNSmall(ResNetNoBN):
         replace_stride_with_dilation=None,
         use_batch_norm=False,
         in_channels=3,
+        inplanes=16,
+        channels=(32, 64, 128)
     ):
         super().__init__(
             block,
@@ -266,18 +268,19 @@ class ResNetNoBNSmall(ResNetNoBN):
             replace_stride_with_dilation=replace_stride_with_dilation,
             use_batch_norm=use_batch_norm,
             in_channels=in_channels,
-            inplanes=16,
-            channels=(32, 64, 128),
+            inplanes=inplanes,
+            channels=channels,
         )
 
 
 class ResNetBuilder(NetworkBuilder):
-    def __init__(self, resnet_cls, block_cls, arch, dataset_info):
+    def __init__(self, resnet_cls, block_cls, arch, dataset_info, **kwargs):
         self._model = resnet_cls(
             block_cls,
             arch,
             num_classes=dataset_info.output_dimension,
             in_channels=dataset_info.input_shape[0],
+            **kwargs,
         )
         super().__init__(dataset_info)
 
@@ -296,9 +299,12 @@ class ResNetBuilder(NetworkBuilder):
     def build_net(self) -> nn.Module:
         return self._model
 
-
 MODEL_FACTORY_MAP = {
     "resnet18": partial(ResNetBuilder, ResNetNoBN, BasicBlock, [2, 2, 2, 2]),
     "resnet34": partial(ResNetBuilder, ResNetNoBN, BasicBlock, [3, 4, 6, 3]),
-    "resnet18_thin": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2]),
+    "resnet18_4": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2], inplanes=4, channels=(8, 16, 32)),
+    "resnet18_8": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2], inplanes=8, channels=(16, 32, 64)),
+    "resnet18_16": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2]),
+    "resnet18_24": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2], inplanes=24, channels=(48, 96, 192)),
+    "resnet18_32": partial(ResNetBuilder, ResNetNoBNSmall, BasicBlock, [2, 2, 2, 2], inplanes=32, channels=(64, 128, 256)),
 }

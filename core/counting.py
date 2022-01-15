@@ -421,10 +421,10 @@ def find_act_patterns_between_points(
         (batch_size, buff_size, 2), fill_value=np.inf, dtype=torch.float64, device=device
     )
     tot_vars = torch.full(
-        logits_x.shape + (buff_size,), fill_value=np.inf, dtype=torch.torch.float64, device=device
+        logits_x.shape + (buff_size,), fill_value=np.inf, dtype=torch.float64, device=device
     )
     abs_deviation = torch.full(
-        logits_x.shape + (buff_size,), fill_value=np.inf, dtype=torch.torch.float64, device=device
+        logits_x.shape + (buff_size,), fill_value=np.inf, dtype=torch.float64, device=device
     )
     logits[indices_to_batches, :, density, 0] = logits_x.detach().clone()
     pts[indices_to_batches, density, 0] = 0.

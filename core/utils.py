@@ -10,6 +10,7 @@ from os import environ
 from multiprocessing import set_start_method
 import random
 import logging
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,6 @@ def init_torch(double_precision=False, cmd_args=None):
         logger.info("e_device={}".format(cmd_args.e_device))
     if double_precision:
         set_default_dtype(float64)
-#    if cmd_args and cmd_args.e_device != "cpu":
-#        if double_precision:
-#            set_default_tensor_type(DoubleTensor)
-#        else:
-#            set_default_tensor_type(FloatTensor)
-
 
 def init_prngs(cmd_args):
     torch.manual_seed(cmd_args.seed)
@@ -214,6 +209,17 @@ def global_iteration_from_engine(engine):
         return engine.state.iteration
 
     return _wrap_global_step
+
+
+"""Dataset utils
+"""
+
+@dataclass(frozen=True)
+class DatasetInfo:
+    __slots__ = ["name", "input_shape", "output_dimension"]
+    name: str
+    input_shape: Union[Tuple[int, int, int], int]
+    output_dimension: int
 
 
 def normalize(tensor: Tensor, mean: List[float], std: List[float], inplace: bool = False) -> Tensor:
