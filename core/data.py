@@ -221,8 +221,13 @@ def create_dataset(
         raise ValueError("{} is not a valid dataset".format(args.data))
 
     dset = None
+    try:
+        random_dataset = args.l_random_dataset
+    except AttributeError:
+        random_dataset = False
+    
     if args.data == Datasets.cifar10:
-        if args.l_random_dataset:
+        if random_dataset:
             dclass = RANDOM_DATASETS_MAP["random_" + str(args.data)]
         else:
             CIFAR10 = torch_dsets.CIFAR10
@@ -263,7 +268,7 @@ def create_dataset(
             args.e_data_dir, transform=transforms, train=train, download=False
         )
     elif args.data == Datasets.cifar100:
-        if args.l_random_dataset:
+        if random_dataset:
             dclass = RANDOM_DATASETS_MAP["random_" + str(args.data)]
         else:
             CIFAR100 = torch_dsets.CIFAR100
