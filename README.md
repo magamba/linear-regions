@@ -2,6 +2,25 @@
 
 This repository contains the code to reproduce the experiments from the paper "Are All Linear Regions Created Equal?".
 
+If you use or drawn inspiration for this code in your experiment, please cite the following reference:
+```bibtex
+
+@InProceedings{gamba2022all,
+  title = 	 { Are All Linear Regions Created Equal? },
+  author =       {Gamba, Matteo and Chmielewski-Anders, Adrian and Sullivan, Josephine and Azizpour, Hossein and Bjorkman, Marten},
+  booktitle = 	 {Proceedings of The 25th International Conference on Artificial Intelligence and Statistics},
+  pages = 	 {6573--6590},
+  year = 	 {2022},
+  editor = 	 {Camps-Valls, Gustau and Ruiz, Francisco J. R. and Valera, Isabel},
+  volume = 	 {151},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {28--30 Mar},
+  publisher =    {PMLR},
+  pdf = 	 {https://proceedings.mlr.press/v151/gamba22a/gamba22a.pdf},
+  url = 	 {https://proceedings.mlr.press/v151/gamba22a.html},
+}
+```
+
 ## Set up
 
 To install all required dependencies, run:
